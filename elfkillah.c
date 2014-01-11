@@ -215,13 +215,14 @@ clean_string_table(ElfContainer *elfc)
   unsigned char *ptr;
   size_t offset, bytes;
 
-  if(elfc->elf32->type == ELF_32){
-    ptr = elfc->elf32;
-    ptr += elfc->elf32->e_shoff; 
-  }else if(elfc->elf64->type == ELF_64){
-    ptr = elfc->elf64;
+  if(elfc->type == ELF_32){
+    ptr = (unsigned char *)(elfc->elf32 + elfc->elf32->e_shoff);
+  }else if(elfc->type == ELF_64){
+    ptr = (unsigned char *)(elfc->elf64 + elfc->elf64->e_shoff);
   }else
     err_exit("clean_string_table()\n");
+
+  
   
 }
 
