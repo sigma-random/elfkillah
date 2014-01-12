@@ -118,7 +118,7 @@ get_string_table(ElfContainer *elfc)
     size = ((Elf64_Shdr *)ptr)->sh_size;
 
   }else
-    err_exit("clean_string_table()\n");
+    err_exit("get_string_table()\n");
 
   elfc->strtbloff = offset;
   elfc->strtblsize = size;
@@ -269,7 +269,6 @@ main(int argc, char *argv[])
   elfc_out = build_container(argv[2]);
   elfc_out->strtbloff = elfc_in->strtbloff;
   elfc_out->strtblsize = elfc_in->strtblsize;
-  printf("%d, %d\n",elfc_in->strtbloff,elfc_in->strtblsize);
   adjust_header(elfc_out);
 
   destroy_container(elfc_out);
