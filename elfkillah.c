@@ -44,6 +44,8 @@ typedef struct {
   int type;
   size_t size;
   size_t mmapped;
+  size_t strtbloff;
+  size_t strtblsize;
   union {
     Elf32_Ehdr *elf32;
     Elf64_Ehdr *elf64;
@@ -85,6 +87,43 @@ align_to_page(size_t size)
     return size + pg_size - (size % pg_size);
 }
 
+static void
+get_string_table(ElfContainer *elfc)
+{
+  unsigned char *ptr;
+  int i;
+  size_t offset, size;
+
+  if(elfc->type == ELF_32){
+    
+    /* Make ptr point to the start of the section headers */
+    ptr = (unsigned char *)elfc->elf32;
+    ptr += elfc->elf32->e_shoff;
+    
+    /* Make ptr point to the start of the string table index section header */
+    ptr += (elfc->elf32->e_shstrndx * elfc->elf32->e_shentsize);
+    
+    /* Take offset and size of the string table into the file */    
+    offset = ((Elf32_Shdr *)ptr)->sh_offset;
+    size = ((Elf32_Shdr *)ptr)->sh_size;
+    
+  }else if(elfc->type == ELF_64){
+
+    /* Same thing as above for, just now for 64 bits */
+    ptr = (unsigned char *)elfc->elf64;
+    ptr += elfc->elf64->e_shoff;
+    ptr += (elfc->elf64->e_shstrndx * elfc->elf64->e_shentsize);
+
+    offset = ((Elf64_Shdr *)ptr)->sh_offset;
+    size = ((Elf64_Shdr *)ptr)->sh_size;
+
+  }else
+    err_exit("clean_string_table()\n");
+
+  elfc->strtbloff = offset;
+  elfc->strtblsize = size;
+}
+
 static ElfContainer *
 build_container(const char *file)
 {
@@ -98,7 +137,7 @@ build_container(const char *file)
 
   fd = open(file,O_RDWR);
   if(fd == -1)
-    err_exit("build_container() --> open()\n");
+    err_exit("build_container() --> open(%s)\n",file);
 
   if(fstat(fd,&sb) == -1)
     err_exit("build_container() --> fstat()\n");
@@ -135,6 +174,8 @@ build_container(const char *file)
     err_exit("build_container() --> bad class\n");
   }
 
+  get_string_table(elfc);
+
   close(fd);
 
   return elfc;
@@ -154,25 +195,30 @@ destroy_container(ElfContainer *elfc)
 }
 
 static void
-adjust_header(const char *file)
+adjust_header(ElfContainer *elfc)
 {
-  ElfContainer *elfc;
-  
-  elfc = build_container(file);
+  unsigned char *ptr;
+  int i;
 
   if(elfc->type == ELF_32){
     elfc->elf32->e_shoff = 0;
     elfc->elf32->e_shentsize = 0;
     elfc->elf32->e_shnum = 0;
     elfc->elf32->e_shstrndx = 0;
+    ptr = (unsigned char *)elfc->elf32;
   }else if(elfc->type == ELF_64){
     elfc->elf64->e_shoff = 0;
     elfc->elf64->e_shentsize = 0;
     elfc->elf64->e_shnum = 0;
     elfc->elf64->e_shstrndx = 0;
+    ptr = (unsigned char *)elfc->elf64;
   }
 
-  destroy_container(elfc);
+  /* Clear content of string table */
+  ptr += elfc->strtbloff;
+
+  for(i=0; i<elfc->strtblsize; i++)
+    ptr[i] = '\0';
   
 }
 
@@ -183,7 +229,7 @@ write_elf(ElfContainer *elfc, const char *out_file)
   mode_t mode;
   size_t size;
   ssize_t written;
-  void *ptr;
+  void *ptr;  
 
   flags = O_CREAT|O_RDWR|O_TRUNC;
   mode = S_IRWXU|S_IRGRP|S_IWGRP;
@@ -209,39 +255,26 @@ write_elf(ElfContainer *elfc, const char *out_file)
   
 }
 
-static void
-clean_string_table(ElfContainer *elfc)
-{
-  unsigned char *ptr;
-  size_t offset, bytes;
-
-  if(elfc->type == ELF_32){
-    ptr = (unsigned char *)(elfc->elf32 + elfc->elf32->e_shoff);
-  }else if(elfc->type == ELF_64){
-    ptr = (unsigned char *)(elfc->elf64 + elfc->elf64->e_shoff);
-  }else
-    err_exit("clean_string_table()\n");
-
-  
-  
-}
-
 int
 main(int argc, char *argv[])
 {
-  ElfContainer *elfc;
+  ElfContainer *elfc_in, *elfc_out;
 
   if(argc != 3 || strcmp(argv[1],"--help") == 0)
      usage(argv[0]);
   
-  elfc = build_container(argv[1]);
-
-  write_elf(elfc,argv[2]);
-  adjust_header(argv[2]);
+  elfc_in = build_container(argv[1]);
+  write_elf(elfc_in,argv[2]);
   
+  elfc_out = build_container(argv[2]);
+  elfc_out->strtbloff = elfc_in->strtbloff;
+  elfc_out->strtblsize = elfc_in->strtblsize;
+  printf("%d, %d\n",elfc_in->strtbloff,elfc_in->strtblsize);
+  adjust_header(elfc_out);
+
+  destroy_container(elfc_out);
+  destroy_container(elfc_in);
+
+    
   exit(EXIT_SUCCESS);
 }
-  
-
-  
-  
