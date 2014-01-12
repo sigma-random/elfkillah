@@ -25,6 +25,9 @@
   of the file, so, cutting the ELF where the section headers starts and
   discarding those contents, does not affect the program functionalities
   when the program will be loaded into memory and executed as a process.
+  Doing so forbids disassemblers and some debuggers to analyze the file.
+  This is a simple antidebug technique for static and maybe simple dynamic
+  analysis.
 */
 
 #include <stdio.h>
@@ -109,7 +112,7 @@ get_string_table(ElfContainer *elfc)
     
   }else if(elfc->type == ELF_64){
 
-    /* Same thing as above for, just now for 64 bits */
+    /* Same thing as above, just now for 64 bits */
     ptr = (unsigned char *)elfc->elf64;
     ptr += elfc->elf64->e_shoff;
     ptr += (elfc->elf64->e_shstrndx * elfc->elf64->e_shentsize);
